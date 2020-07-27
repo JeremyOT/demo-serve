@@ -1,0 +1,4 @@
+github.com/JeremyOT/address v0.0.0-20150705201355-4b71fb4158e9 h1:ViqXa4rbXNQe9HfbgybBZvbcFEL3NRWpj3DfVe1qT7g=
+github.com/JeremyOT/address v0.0.0-20150705201355-4b71fb4158e9/go.mod h1:2EoX8ay7mfsFj5L0b2pOc/bQPxnZdwCDWheiJH1/AAI=
+github.com/JeremyOT/httpserver v0.0.0-20190326165120-13058f124089 h1:VG2X4V5vFkYO6MxFySEbOyHeQYwyA4obLuLMAXxxEy0=
+github.com/JeremyOT/httpserver v0.0.0-20190326165120-13058f124089/go.mod h1:qVd+A4M8cLcUX+xXyJqWIFvZndszmXVjkxhDriC06pM=
