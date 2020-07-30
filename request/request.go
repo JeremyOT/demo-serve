@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -18,6 +19,9 @@ var (
 	duration  = flag.Duration("duration", 0, "How long to make requests for (forever by default).")
 	once      = flag.Bool("once", false, "Make a single request and exit.")
 	keepAlive = flag.Bool("keep-alive", false, "Use HTTP keep-alives.")
+	version   = flag.Bool("version", false, "Print the version and exit.")
+	// Build version
+	Build = "n/a"
 )
 
 func logRequest(client *http.Client) {
@@ -36,9 +40,13 @@ func logRequest(client *http.Client) {
 }
 
 func main() {
+	flag.Parse()
+	if *version {
+		fmt.Println("Build:", Build)
+		return
+	}
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
-	flag.Parse()
 	if !strings.HasPrefix(*address, "http") {
 		*address = "http://" + *address
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -17,6 +18,9 @@ import (
 var (
 	address = flag.String("address", ":8080", "Serve on this address.")
 	message = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
+	version = flag.Bool("version", false, "Print the version and exit.")
+	// Build version
+	Build = "n/a"
 )
 
 func monitorSignal(s *httpserver.Server, sigChan <-chan os.Signal) {
@@ -53,9 +57,13 @@ func currentTime() string {
 }
 
 func main() {
+	flag.Parse()
+	if *version {
+		fmt.Println("Build:", Build)
+		return
+	}
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
-	flag.Parse()
 	funcs := template.FuncMap{"env": os.Getenv, "now": currentTime, "addr": localAddr}
 	s := &service{
 		message: template.Must(template.New("message").Funcs(funcs).Parse(*message)),
