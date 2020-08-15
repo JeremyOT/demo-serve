@@ -62,7 +62,7 @@ func main() {
 		fmt.Println("Build:", Build)
 		return
 	}
-	sigChan := make(chan os.Signal)
+	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	funcs := template.FuncMap{"env": os.Getenv, "now": currentTime, "addr": localAddr}
 	s := &service{

@@ -45,7 +45,7 @@ func main() {
 		fmt.Println("Build:", Build)
 		return
 	}
-	sigChan := make(chan os.Signal)
+	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	if !strings.HasPrefix(*address, "http") {
 		*address = "http://" + *address
