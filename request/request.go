@@ -39,6 +39,14 @@ func logRequest(client *http.Client) {
 	log.Println(string(buf))
 }
 
+func monitorSignal(quit chan struct{}, sigChan <-chan os.Signal) {
+	<-sigChan
+	close(quit)
+	<-sigChan
+	log.Print("Force quitting...")
+	os.Exit(-1)
+}
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -46,7 +54,9 @@ func main() {
 		return
 	}
 	sigChan := make(chan os.Signal, 1)
+	quit := make(chan struct{})
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	go monitorSignal(quit, sigChan)
 	if !strings.HasPrefix(*address, "http") {
 		*address = "http://" + *address
 	}
@@ -62,7 +72,7 @@ func main() {
 	tick := time.Tick(*interval)
 	for {
 		select {
-		case <-sigChan:
+		case <-quit:
 			return
 		case <-tick:
 			logRequest(client)
