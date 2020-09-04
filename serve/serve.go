@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -40,7 +42,27 @@ type service struct {
 	message *template.Template
 }
 
+func (s *service) cpuLoad(request *http.Request) {
+	start := time.Now()
+	ops := 100000000
+	count := request.URL.Query().Get("ops")
+	if count != "" {
+		var err error
+		if ops, err = strconv.Atoi(count); err != nil {
+			log.Printf("Error parsing ops: %v", err)
+		}
+	}
+	x := 42.0
+	for i := 0; i < ops; i++ {
+		x += math.Sqrt(42.0)
+	}
+	log.Printf("Performed %v operations in %v", ops, time.Now().Sub(start))
+}
+
 func (s *service) handleRequest(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == "/cpu" {
+		s.cpuLoad(request)
+	}
 	s.message.Execute(writer, nil)
 }
 
