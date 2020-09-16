@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,11 +23,12 @@ var (
 	version   = flag.Bool("version", false, "Print the version and exit.")
 	quiet     = flag.Bool("quiet", false, "Don't log responses.")
 	workers   = flag.Int("workers", 1, "Make requests in parallel.")
+	protocol  = flag.String("protocol", "http", "{udp, tcp, http}")
 	// Build version
 	Build = "n/a"
 )
 
-func logRequest(client *http.Client) {
+func logHTTPRequest(client *http.Client) {
 	resp, err := client.Get(*address)
 	if err != nil {
 		log.Printf("Request error: %v", err)
@@ -40,6 +42,40 @@ func logRequest(client *http.Client) {
 	}
 	if !*quiet {
 		log.Println(string(buf))
+	}
+}
+
+func logRaw() {
+	conn, err := net.Dial(*protocol, *address)
+	if err != nil {
+		log.Printf("%v dial error: %v", *protocol, err)
+		return
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte(*address)); err != nil {
+		log.Printf("%v write error: %v", *protocol, err)
+		return
+	}
+	var buf [4096]byte
+	n, err := conn.Read(buf[0:])
+	if err != nil {
+		log.Printf("%v read error: %v", *protocol, err)
+		return
+	}
+	if !*quiet {
+		log.Println(string(buf[:n]))
+	}
+}
+
+func logRequest(client *http.Client) {
+	switch *protocol {
+	case "http":
+		logHTTPRequest(client)
+		return
+	case "tcp", "udp":
+		logRaw()
+	default:
+		log.Fatalf("Unsupported protocol: %v", *protocol)
 	}
 }
 
@@ -79,7 +115,8 @@ func main() {
 	quit := make(chan struct{})
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	go monitorSignal(quit, sigChan)
-	if !strings.HasPrefix(*address, "http") {
+	*protocol = strings.ToLower(*protocol)
+	if *protocol == "http" && !strings.HasPrefix(*address, "http") {
 		*address = "http://" + *address
 	}
 

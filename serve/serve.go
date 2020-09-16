@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"html/template"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,9 +21,10 @@ import (
 )
 
 var (
-	address = flag.String("address", ":8080", "Serve on this address.")
-	message = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
-	version = flag.Bool("version", false, "Print the version and exit.")
+	address  = flag.String("address", ":8080", "Serve on this address.")
+	protocol = flag.String("protocol", "http", "{udp, tcp, http}")
+	message  = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
+	version  = flag.Bool("version", false, "Print the version and exit.")
 	// Build version
 	Build = "n/a"
 )
@@ -78,6 +82,41 @@ func currentTime() string {
 	return time.Now().Format(time.RFC3339)
 }
 
+func listen(l net.Listener, s *service) {
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatalf("Failed to accept incoming connection: %v", err)
+		}
+		log.Printf("Incoming connection from %v", conn.RemoteAddr())
+		go func() {
+			defer conn.Close()
+			var buf [4096]byte
+			_, err := conn.Read(buf[:])
+			if err != nil {
+				log.Printf("Read failed: %v", err)
+			}
+			var output bytes.Buffer
+			s.message.Execute(&output, nil)
+			output.WriteTo(conn)
+		}()
+	}
+}
+
+func listenPacket(conn net.PacketConn, s *service) {
+	for {
+		var buf [4096]byte
+		_, addr, err := conn.ReadFrom(buf[:])
+		if err != nil {
+			log.Printf("Read failed: %v", err)
+		}
+		log.Printf("Incoming packet from %v", addr)
+		var output bytes.Buffer
+		s.message.Execute(&output, nil)
+		conn.WriteTo(output.Bytes(), addr)
+	}
+}
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -90,8 +129,28 @@ func main() {
 	s := &service{
 		message: template.Must(template.New("message").Funcs(funcs).Parse(*message)),
 	}
-	s.Server = httpserver.New(s.handleRequest)
-	s.Start(*address)
-	go monitorSignal(s.Server, sigChan)
-	<-s.Wait()
+	*protocol = strings.ToLower(*protocol)
+	switch *protocol {
+	case "http":
+		s.Server = httpserver.New(s.handleRequest)
+		s.Start(*address)
+		go monitorSignal(s.Server, sigChan)
+		<-s.Wait()
+	case "tcp":
+		l, err := net.Listen(*protocol, *address)
+		if err != nil {
+			log.Fatalf("Failed to listen %v %v: %v", *protocol, *address, err)
+		}
+		go listen(l, s)
+		<-sigChan
+	case "udp":
+		l, err := net.ListenPacket(*protocol, *address)
+		if err != nil {
+			log.Fatalf("Failed to listen %v %v: %v", *protocol, *address, err)
+		}
+		go listenPacket(l, s)
+		<-sigChan
+	default:
+		log.Fatalf("Unsupported protocol: %v", *protocol)
+	}
 }
