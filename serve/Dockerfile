@@ -8,4 +8,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -o /serve -ldflags="-X main.Build=${BUI
 FROM scratch
 COPY --from=builder /serve /serve
 
-ENTRYPOINT ["/serve", "--address=:8080", "--message='hello from {{addr}}'"]
+ENTRYPOINT ["/serve", "--message='hello from {{addr}}'"]
