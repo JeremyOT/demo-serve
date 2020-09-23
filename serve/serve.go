@@ -20,26 +20,26 @@ import (
 	"github.com/JeremyOT/httpserver"
 )
 
+type multiArg []string
+
+func (a *multiArg) Set(v string) error {
+	*a = append(*a, v)
+	return nil
+}
+
+func (a *multiArg) String() string {
+	return strings.Join(*a, ",")
+}
+
 var (
-	address  = flag.String("address", ":8080", "Serve on this address.")
-	protocol = flag.String("protocol", "http", "{udp, tcp, http}")
-	message  = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
-	version  = flag.Bool("version", false, "Print the version and exit.")
+	httpAddress multiArg
+	tcpAddress  multiArg
+	udpAddress  multiArg
+	message     = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
+	version     = flag.Bool("version", false, "Print the version and exit.")
 	// Build version
 	Build = "n/a"
 )
-
-func monitorSignal(s *httpserver.Server, sigChan <-chan os.Signal) {
-	sig := <-sigChan
-	log.Printf("Exiting (%s)...", sig)
-	select {
-	case <-s.Stop():
-		return
-	case <-sigChan:
-		log.Printf("Force quitting (%s)...", sig)
-		os.Exit(-1)
-	}
-}
 
 type service struct {
 	*httpserver.Server
@@ -118,10 +118,21 @@ func listenPacket(conn net.PacketConn, s *service) {
 }
 
 func main() {
+	flag.Var(&httpAddress, "http", "Serve on this address.")
+	flag.Var(&tcpAddress, "tcp", "Serve on this address.")
+	flag.Var(&udpAddress, "udp", "Serve on this address.")
+	flag.CommandLine.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		fmt.Fprintf(flag.CommandLine.Output(), "\nServe multiple ports/protocols by passing each the udp, tcp, http args multiple times.\n\nThe default is equivalent to --http=:8080.")
+	}
 	flag.Parse()
 	if *version {
 		fmt.Println("Build:", Build)
 		return
+	}
+	if len(httpAddress) == 0 && len(tcpAddress) == 0 && len(udpAddress) == 0 {
+		httpAddress = append(httpAddress, ":8080")
 	}
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
@@ -129,28 +140,27 @@ func main() {
 	s := &service{
 		message: template.Must(template.New("message").Funcs(funcs).Parse(*message)),
 	}
-	*protocol = strings.ToLower(*protocol)
-	switch *protocol {
-	case "http":
+
+	for _, a := range httpAddress {
 		s.Server = httpserver.New(s.handleRequest)
-		s.Start(*address)
-		go monitorSignal(s.Server, sigChan)
-		<-s.Wait()
-	case "tcp":
-		l, err := net.Listen(*protocol, *address)
+		if err := s.Start(a); err != nil {
+			log.Fatalf("Failed to listen http://%v: %v", a, err)
+		}
+	}
+	for _, a := range tcpAddress {
+		l, err := net.Listen("tcp", a)
 		if err != nil {
-			log.Fatalf("Failed to listen %v %v: %v", *protocol, *address, err)
+			log.Fatalf("Failed to listen tcp://%v: %v", a, err)
 		}
 		go listen(l, s)
-		<-sigChan
-	case "udp":
-		l, err := net.ListenPacket(*protocol, *address)
+	}
+	for _, a := range udpAddress {
+		l, err := net.ListenPacket("udp", a)
 		if err != nil {
-			log.Fatalf("Failed to listen %v %v: %v", *protocol, *address, err)
+			log.Fatalf("Failed to listen udp://%v: %v", a, err)
 		}
 		go listenPacket(l, s)
-		<-sigChan
-	default:
-		log.Fatalf("Unsupported protocol: %v", *protocol)
 	}
+
+	<-sigChan
 }
