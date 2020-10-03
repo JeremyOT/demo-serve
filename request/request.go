@@ -15,20 +15,22 @@ import (
 )
 
 var (
-	address   = flag.String("address", "", "The address to connect to.")
-	interval  = flag.Duration("interval", time.Second, "How often to make requests.")
-	duration  = flag.Duration("duration", 0, "How long to make requests for (forever by default).")
-	once      = flag.Bool("once", false, "Make a single request and exit.")
-	keepAlive = flag.Bool("keep-alive", false, "Use HTTP keep-alives.")
-	version   = flag.Bool("version", false, "Print the version and exit.")
-	quiet     = flag.Bool("quiet", false, "Don't log responses.")
-	workers   = flag.Int("workers", 1, "Make requests in parallel.")
-	protocol  = flag.String("protocol", "http", "{udp, tcp, http}")
+	address     = flag.String("address", "", "The address to connect to.")
+	interval    = flag.Duration("interval", time.Second, "How often to make requests.")
+	duration    = flag.Duration("duration", 0, "How long to make requests for (forever by default).")
+	once        = flag.Bool("once", false, "Make a single request and exit.")
+	keepAlive   = flag.Bool("keep-alive", false, "Use HTTP keep-alives.")
+	version     = flag.Bool("version", false, "Print the version and exit.")
+	quiet       = flag.Bool("quiet", false, "Don't log responses.")
+	showLatency = flag.Bool("latency", false, "Prefix responses with latency.")
+	workers     = flag.Int("workers", 1, "Make requests in parallel.")
+	protocol    = flag.String("protocol", "http", "{udp, tcp, http}")
 	// Build version
 	Build = "n/a"
 )
 
 func logHTTPRequest(client *http.Client) {
+	start := time.Now()
 	resp, err := client.Get(*address)
 	if err != nil {
 		log.Printf("Request error: %v", err)
@@ -40,9 +42,14 @@ func logHTTPRequest(client *http.Client) {
 		log.Printf("Request error: %v", err)
 		return
 	}
-	if !*quiet {
-		log.Println(string(buf))
+	if *quiet {
+		return
 	}
+	message := string(buf)
+	if *showLatency {
+		message = fmt.Sprintf("[%v] %s", time.Since(start), message)
+	}
+	log.Println(message)
 }
 
 func logRaw() {
