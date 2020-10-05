@@ -117,6 +117,14 @@ func listenPacket(conn net.PacketConn, s *service) {
 	}
 }
 
+func monitorSignal(quit chan struct{}, sigChan <-chan os.Signal) {
+	<-sigChan
+	close(quit)
+	<-sigChan
+	log.Print("Force quitting...")
+	os.Exit(-1)
+}
+
 func main() {
 	flag.Var(&httpAddress, "http", "Serve on this address.")
 	flag.Var(&tcpAddress, "tcp", "Serve on this address.")
@@ -136,6 +144,8 @@ func main() {
 	}
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	quit := make(chan struct{})
+	go monitorSignal(quit, sigChan)
 	funcs := template.FuncMap{"env": os.Getenv, "now": currentTime, "addr": localAddr}
 	s := &service{
 		message: template.Must(template.New("message").Funcs(funcs).Parse(*message)),
@@ -162,5 +172,5 @@ func main() {
 		go listenPacket(l, s)
 	}
 
-	<-sigChan
+	<-quit
 }

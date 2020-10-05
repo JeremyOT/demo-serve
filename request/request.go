@@ -118,7 +118,7 @@ func main() {
 		fmt.Println("Build:", Build)
 		return
 	}
-	sigChan := make(chan os.Signal, 1)
+	sigChan := make(chan os.Signal, 2)
 	quit := make(chan struct{})
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	go monitorSignal(quit, sigChan)
