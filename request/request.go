@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net"
@@ -21,13 +23,33 @@ var (
 	once        = flag.Bool("once", false, "Make a single request and exit.")
 	keepAlive   = flag.Bool("keep-alive", false, "Use HTTP keep-alives.")
 	version     = flag.Bool("version", false, "Print the version and exit.")
-	quiet       = flag.Bool("quiet", false, "Don't log responses.")
-	showLatency = flag.Bool("latency", false, "Prefix responses with latency.")
+	quiet       = flag.Bool("quiet", false, "Don't log responses. If used with template, print only the template text.")
+	showLatency = flag.Bool("latency", false, "Prefix responses with latency. Ignored if format is supplied.")
+	format      = flag.String("format", "", "Log results with the specified go-template. Allowed variables: {{.Response, .Latency, .Seconds, .Body}}.")
 	workers     = flag.Int("workers", 1, "Make requests in parallel.")
 	protocol    = flag.String("protocol", "http", "{udp, tcp, http}")
 	// Build version
-	Build = "n/a"
+	Build            = "n/a"
+	responseTemplate *template.Template
 )
+
+type response struct {
+	Response *http.Response
+	Latency  time.Duration
+	Seconds  float64
+	Body     string
+}
+
+func responseString(r *response) string {
+	if responseTemplate != nil {
+		var buf bytes.Buffer
+		if err := responseTemplate.Execute(&buf, r); err != nil {
+			return fmt.Sprintf("%v: %v", err, r.Body)
+		}
+		return string(buf.Bytes())
+	}
+	return r.Body
+}
 
 func logHTTPRequest(client *http.Client) {
 	start := time.Now()
@@ -42,17 +64,24 @@ func logHTTPRequest(client *http.Client) {
 		log.Printf("Request error: %v", err)
 		return
 	}
+	l := time.Since(start)
+	r := &response{
+		Response: resp,
+		Latency:  l,
+		Seconds:  l.Seconds(),
+		Body:     string(buf),
+	}
 	if *quiet {
+		if responseTemplate != nil {
+			fmt.Println(responseString(r))
+		}
 		return
 	}
-	message := string(buf)
-	if *showLatency {
-		message = fmt.Sprintf("[%v] %s", time.Since(start), message)
-	}
-	log.Println(message)
+	log.Println(responseString(r))
 }
 
 func logRaw() {
+	start := time.Now()
 	conn, err := net.Dial(*protocol, *address)
 	if err != nil {
 		log.Printf("%v dial error: %v", *protocol, err)
@@ -69,9 +98,19 @@ func logRaw() {
 		log.Printf("%v read error: %v", *protocol, err)
 		return
 	}
-	if !*quiet {
-		log.Println(string(buf[:n]))
+	l := time.Since(start)
+	r := &response{
+		Latency: l,
+		Seconds: l.Seconds(),
+		Body:    string(buf[:n]),
 	}
+	if *quiet {
+		if responseTemplate != nil {
+			fmt.Println(responseString(r))
+		}
+		return
+	}
+	log.Println(responseString(r))
 }
 
 func logRequest(client *http.Client) {
@@ -125,6 +164,19 @@ func main() {
 	*protocol = strings.ToLower(*protocol)
 	if *protocol == "http" && !strings.HasPrefix(*address, "http") {
 		*address = "http://" + *address
+	}
+
+	if *format == "" {
+		if *showLatency {
+			if *quiet {
+				*format = "{{.Latency}}"
+			} else {
+				*format = "[{{.Latency}}] {{.Body}}"
+			}
+		}
+	}
+	if *format != "" {
+		responseTemplate = template.Must(template.New("response").Parse(*format))
 	}
 
 	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: !*keepAlive}}
