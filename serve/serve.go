@@ -38,7 +38,8 @@ var (
 	message     = flag.String("message", "Hello from {{addr}}", "The message to respond with.")
 	version     = flag.Bool("version", false, "Print the version and exit.")
 	// Build version
-	Build = "n/a"
+	Build           = "n/a"
+	cachedLocalAddr = ""
 )
 
 type service struct {
@@ -67,14 +68,19 @@ func (s *service) handleRequest(writer http.ResponseWriter, request *http.Reques
 	if request.URL.Path == "/cpu" {
 		s.cpuLoad(request)
 	}
-	s.message.Execute(writer, nil)
+
+	s.message.Execute(writer, map[string]string{"remote": request.RemoteAddr})
 }
 
 func localAddr() string {
+	if cachedLocalAddr != "" {
+		return cachedLocalAddr
+	}
 	addr, err := lookup.GetAddress(true)
 	if err != nil {
 		panic(err)
 	}
+	cachedLocalAddr = addr
 	return addr
 }
 
@@ -88,7 +94,8 @@ func listen(l net.Listener, s *service) {
 		if err != nil {
 			log.Fatalf("Failed to accept incoming connection: %v", err)
 		}
-		log.Printf("Incoming connection from %v", conn.RemoteAddr())
+		addr := conn.RemoteAddr()
+		log.Printf("Incoming connection from %v", addr)
 		go func() {
 			defer conn.Close()
 			var buf [4096]byte
@@ -97,7 +104,7 @@ func listen(l net.Listener, s *service) {
 				log.Printf("Read failed: %v", err)
 			}
 			var output bytes.Buffer
-			s.message.Execute(&output, nil)
+			s.message.Execute(&output, map[string]string{"remote": addr.String()})
 			output.WriteTo(conn)
 		}()
 	}
@@ -112,7 +119,7 @@ func listenPacket(conn net.PacketConn, s *service) {
 		}
 		log.Printf("Incoming packet from %v", addr)
 		var output bytes.Buffer
-		s.message.Execute(&output, nil)
+		s.message.Execute(&output, map[string]string{"remote": addr.String()})
 		conn.WriteTo(output.Bytes(), addr)
 	}
 }
@@ -146,7 +153,9 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	quit := make(chan struct{})
 	go monitorSignal(quit, sigChan)
+
 	funcs := template.FuncMap{"env": os.Getenv, "now": currentTime, "addr": localAddr}
+
 	s := &service{
 		message: template.Must(template.New("message").Funcs(funcs).Parse(*message)),
 	}
