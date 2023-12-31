@@ -1,17 +1,11 @@
 BUILD != git describe --always --dirty --broken
 
-all: request serve
-
 .PHONY: serve
 serve:
-	docker buildx build --platform=linux/amd64 -t jeremyot/serve:latest -t jeremyot/serve:$(BUILD) --build-arg BUILD=$(BUILD) --load serve
+	BUILD=${BUILD} KO_DOCKER_REPO=jeremyot ko build ./serve --base-import-paths --tags ${BUILD},latest
 
 .PHONY: request
 request:
-	docker buildx build --platform=linux/amd64 -t jeremyot/request:latest -t jeremyot/request:$(BUILD) --build-arg BUILD=$(BUILD) --load request
+	BUILD=${BUILD} KO_DOCKER_REPO=jeremyot ko build ./request --base-import-paths --tags ${BUILD},latest
 
 release: serve request
-	docker buildx build --platform=linux/amd64,linux/arm64 -t jeremyot/serve:latest -t jeremyot/serve:$(BUILD) --build-arg BUILD=$(BUILD) --push serve
-	docker buildx build --platform=linux/amd64,linux/arm64 -t jeremyot/request:latest -t jeremyot/request:$(BUILD) --build-arg BUILD=$(BUILD) --push request
-	docker buildx build --platform=linux/amd64,linux/arm64 -t jeremyot/serve:latest -t jeremyot/serve:latest --build-arg BUILD=$(BUILD) --push serve
-	docker buildx build --platform=linux/amd64,linux/arm64 -t jeremyot/request:latest -t jeremyot/request:latest --build-arg BUILD=$(BUILD) --push request

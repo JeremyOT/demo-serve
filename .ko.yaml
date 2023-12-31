@@ -1,0 +1,16 @@
+defaultBaseImage: gcr.io/distroless/base
+builds:
+- id: serve
+  dir: .
+  main: ./serve
+  ldflags:
+  - -s -w
+  - -extldflags "-static"
+  - -X main.Build={{.Env.BUILD}}
+- id: request
+  dir: .
+  main: ./request
+  ldflags:
+  - -s -w
+  - -extldflags "-static"
+  - -X main.Build={{.Env.BUILD}}

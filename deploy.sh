@@ -52,7 +52,7 @@ spec:
               fieldPath: metadata.name
         image: jeremyot/serve:${TAG}
         args:
-        - --http=:80
+        - --http=:8080
         - --message=Hello from {{env "POD_NAME"}} ({{addr}}) on node {{env "NODE_NAME"}}
         name: ${SERVER_NAME}
         resources:
@@ -70,6 +70,7 @@ spec:
   - name: http
     port: 80
     protocol: TCP
+    targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
